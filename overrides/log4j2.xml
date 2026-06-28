@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ===================================================================== -->
+<!--                                                                       -->
+<!--  Log4j Configuration                                                  -->
+<!--                                                                       -->
+<!-- ===================================================================== -->
+
+<Configuration>
+
+    <Appenders>
+        <RollingFile name="FILE" fileName="${sys:log.dir}/serviio.log" filePattern="${sys:log.dir}/serviio.log.%i">
+            <PatternLayout pattern="%d{ISO8601} %-5p [%c{1}] %m%n" />
+            <Policies>
+                <SizeBasedTriggeringPolicy size="5000KB" />
+            </Policies>
+            <DefaultRolloverStrategy max="5" fileIndex="min" />
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="org.serviio" level="info" />
+
+        <Logger name="com.sun.syndication" level="error" />
+        <Logger name="org.jaudiotagger" level="error" />
+        <Logger name="org.restlet" level="off" />
+        <Logger name="LogService" level="off" /> <!-- Restlet access log -->
+        <Logger name="org.apache.commons.jcs" level="warn" />
+
+        <Root level="info">
+            <AppenderRef ref="FILE" />
+        </Root>
+    </Loggers>
+
+</Configuration>

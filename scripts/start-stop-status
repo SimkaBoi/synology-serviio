@@ -1,0 +1,99 @@
+#!/bin/sh
+
+PACKAGE_DIR="/var/packages/Serviio"
+TARGET_DIR="${PACKAGE_DIR}/target"
+SERVIIO_HOME="${TARGET_DIR}/serviio"
+# Use DSM 7 package data dir — pre-created by DSM, writable by package user
+# Resolves to /volume1/@appdata/Serviio/
+SERVIIO_DATA="${PACKAGE_DIR}/var"
+SERVIIO_PID_FILE="${PACKAGE_DIR}/var/serviio.pid"
+
+# ── Java detection ────────────────────────────────────────────────────────────
+if [ -x "${SERVIIO_HOME}/jre/bin/java" ]; then
+    JAVA="${SERVIIO_HOME}/jre/bin/java"
+elif [ -x "/var/packages/Java8/target/j2sdk-image/bin/java" ]; then
+    JAVA="/var/packages/Java8/target/j2sdk-image/bin/java"
+elif [ -x "/var/packages/Java11/target/bin/java" ]; then
+    JAVA="/var/packages/Java11/target/bin/java"
+elif command -v java >/dev/null 2>&1; then
+    JAVA="$(command -v java)"
+else
+    echo "ERROR: Java not found."
+    exit 1
+fi
+
+SERVIIO_OPTS="-Xmx512m -Xms128m"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dserviio.home=${SERVIIO_HOME}"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dserviio.profilesDir=${SERVIIO_DATA}/profiles"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dlog.dir=${SERVIIO_DATA}/log"
+# Derby resolves "db" relative to derby.system.home — must be a writable data dir
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dderby.system.home=${SERVIIO_DATA}"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Djava.awt.headless=true"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Djava.net.preferIPv4Stack=true"
+
+CLASSPATH="${SERVIIO_HOME}/config:${SERVIIO_HOME}/lib/*"
+
+start() {
+    logger -t Serviio "start-stop-status running as: $(id)"
+    mkdir -p "${SERVIIO_DATA}/log" "${SERVIIO_DATA}/profiles" "${SERVIIO_DATA}/config"
+
+    if [ -f "${SERVIIO_PID_FILE}" ]; then
+        PID=$(cat "${SERVIIO_PID_FILE}")
+        if kill -0 "${PID}" 2>/dev/null; then
+            echo "Serviio is already running (PID: ${PID})"
+            return 0
+        fi
+        rm -f "${SERVIIO_PID_FILE}"
+    fi
+
+    # DSM 7 already runs this script as sc-serviio — launch Java directly
+    "${JAVA}" ${SERVIIO_OPTS} -cp "${CLASSPATH}" org.serviio.MediaServer \
+        >> "${SERVIIO_DATA}/log/serviio.log" 2>&1 &
+    echo $! > "${SERVIIO_PID_FILE}"
+    echo "Serviio started (PID: $(cat ${SERVIIO_PID_FILE}))"
+}
+
+stop() {
+    if [ ! -f "${SERVIIO_PID_FILE}" ]; then
+        echo "Serviio is not running"
+        return 0
+    fi
+
+    PID=$(cat "${SERVIIO_PID_FILE}")
+    if kill -0 "${PID}" 2>/dev/null; then
+        kill "${PID}"
+        i=0
+        while kill -0 "${PID}" 2>/dev/null && [ "${i}" -lt 15 ]; do
+            sleep 1
+            i=$((i + 1))
+        done
+        if kill -0 "${PID}" 2>/dev/null; then
+            kill -9 "${PID}"
+        fi
+    fi
+
+    rm -f "${SERVIIO_PID_FILE}"
+    echo "Serviio stopped"
+}
+
+status() {
+    if [ -f "${SERVIIO_PID_FILE}" ]; then
+        PID=$(cat "${SERVIIO_PID_FILE}")
+        if kill -0 "${PID}" 2>/dev/null; then
+            echo "package Serviio is started"
+            exit 0
+        fi
+    fi
+    echo "package Serviio is stopped"
+    exit 1
+}
+
+case "$1" in
+    start)  start  ;;
+    stop)   stop   ;;
+    status) status ;;
+    *)
+        echo "Usage: $0 {start|stop|status}"
+        exit 1
+        ;;
+esac
