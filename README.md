@@ -16,6 +16,8 @@ chmod +x build.sh
 
 On first run this downloads Serviio 2.5 and Eclipse Temurin 11 JRE into `.cache/` and builds `Serviio-2.5-0001.spk`. Subsequent runs use the cached downloads.
 
+Alternatively a pre-built package can be downloaded from Releases.
+
 ## Install
 
 1. In Synology, open **Package Center → Manual Install**
