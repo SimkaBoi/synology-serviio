@@ -1,5 +1,5 @@
 package="Serviio"
-version="2.5-0001"
+version="2.5-0002"
 os_min_ver="7.0-40000"
 description="Serviio is a free DLNA media server that allows you to stream your media to your home network devices."
 description_enu="Serviio is a free DLNA media server that allows you to stream your media to your home network devices."

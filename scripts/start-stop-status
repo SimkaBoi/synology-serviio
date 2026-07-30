@@ -7,35 +7,38 @@ SERVIIO_HOME="${TARGET_DIR}/serviio"
 # Resolves to /volume1/@appdata/Serviio/
 SERVIIO_DATA="${PACKAGE_DIR}/var"
 SERVIIO_PID_FILE="${PACKAGE_DIR}/var/serviio.pid"
+SERVIIO_LOG_FILE="${SERVIIO_DATA}/log/serviio.log"
 
-# ── Java detection ────────────────────────────────────────────────────────────
-if [ -x "${SERVIIO_HOME}/jre/bin/java" ]; then
-    JAVA="${SERVIIO_HOME}/jre/bin/java"
-elif [ -x "/var/packages/Java8/target/j2sdk-image/bin/java" ]; then
-    JAVA="/var/packages/Java8/target/j2sdk-image/bin/java"
-elif [ -x "/var/packages/Java11/target/bin/java" ]; then
-    JAVA="/var/packages/Java11/target/bin/java"
-elif command -v java >/dev/null 2>&1; then
-    JAVA="$(command -v java)"
-else
-    echo "ERROR: Java not found."
+die() {
+    echo "ERROR: $*"
     exit 1
-fi
+}
+
+JAVA="${SERVIIO_HOME}/jre/bin/java"
+[ -x "${JAVA}" ] || die "bundled JRE missing or not executable: ${JAVA}"
+
+LANG=en_US.UTF-8
+LC_ALL=en_US.UTF-8
+export LANG LC_ALL
 
 SERVIIO_OPTS="-Xmx512m -Xms128m"
 SERVIIO_OPTS="${SERVIIO_OPTS} -Dserviio.home=${SERVIIO_HOME}"
-SERVIIO_OPTS="${SERVIIO_OPTS} -Dserviio.profilesDir=${SERVIIO_DATA}/profiles"
 SERVIIO_OPTS="${SERVIIO_OPTS} -Dlog.dir=${SERVIIO_DATA}/log"
-# Derby resolves "db" relative to derby.system.home — must be a writable data dir
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
 SERVIIO_OPTS="${SERVIIO_OPTS} -Dderby.system.home=${SERVIIO_DATA}"
+SERVIIO_OPTS="${SERVIIO_OPTS} -Dserviio.defaultTranscodeFolder=${SERVIIO_DATA}/transcode"
 SERVIIO_OPTS="${SERVIIO_OPTS} -Djava.awt.headless=true"
 SERVIIO_OPTS="${SERVIIO_OPTS} -Djava.net.preferIPv4Stack=true"
 
 CLASSPATH="${SERVIIO_HOME}/config:${SERVIIO_HOME}/lib/*"
 
 start() {
-    logger -t Serviio "start-stop-status running as: $(id)"
-    mkdir -p "${SERVIIO_DATA}/log" "${SERVIIO_DATA}/profiles" "${SERVIIO_DATA}/config"
+    echo "start-stop-status start, running as: $(id)"
+
+    for dir in "${SERVIIO_DATA}/log" "${SERVIIO_DATA}/config" \
+               "${SERVIIO_DATA}/transcode"; do
+        mkdir -p "${dir}" || die "cannot create ${dir} — is ${SERVIIO_DATA} writable by $(id -un)?"
+    done
 
     if [ -f "${SERVIIO_PID_FILE}" ]; then
         PID=$(cat "${SERVIIO_PID_FILE}")
@@ -46,11 +49,18 @@ start() {
         rm -f "${SERVIIO_PID_FILE}"
     fi
 
-    # DSM 7 already runs this script as sc-serviio — launch Java directly
+    touch "${SERVIIO_LOG_FILE}" || die "cannot write ${SERVIIO_LOG_FILE}"
+
     "${JAVA}" ${SERVIIO_OPTS} -cp "${CLASSPATH}" org.serviio.MediaServer \
-        >> "${SERVIIO_DATA}/log/serviio.log" 2>&1 &
-    echo $! > "${SERVIIO_PID_FILE}"
-    echo "Serviio started (PID: $(cat ${SERVIIO_PID_FILE}))"
+        >> "${SERVIIO_LOG_FILE}" 2>&1 &
+    PID=$!
+
+    sleep 1
+    kill -0 "${PID}" 2>/dev/null || die "Java exited immediately — see ${SERVIIO_LOG_FILE}"
+
+    echo "${PID}" > "${SERVIIO_PID_FILE}" || die "cannot write ${SERVIIO_PID_FILE}"
+    echo "Serviio started (PID: ${PID})"
+    return 0
 }
 
 stop() {

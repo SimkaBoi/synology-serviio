@@ -10,7 +10,7 @@
 set -e
 
 PACKAGE_NAME="Serviio"
-PACKAGE_VERSION="2.5-0001"
+PACKAGE_VERSION="2.5-0002"
 OUTPUT_FILE="${PACKAGE_NAME}-${PACKAGE_VERSION}.spk"
 BUILD_DIR="$(mktemp -d)"
 CACHE_DIR="$(pwd)/.cache"
@@ -81,7 +81,15 @@ ensure_jre() {
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     tar -xzf "${archive}" -C "${tmp_dir}"
-    extracted="$(ls -d "${tmp_dir}"/*/)"
+
+    set -- "${tmp_dir}"/*/
+    local extracted="$1"
+    if [ ! -d "${extracted}" ]; then
+        rm -rf "${tmp_dir}"
+        echo "ERROR: unexpected layout in ${TEMURIN_ARCHIVE} — no top-level directory" >&2
+        exit 1
+    fi
+
     mv "${extracted}" "${JRE_DIR}"
     rm -rf "${tmp_dir}"
 }
